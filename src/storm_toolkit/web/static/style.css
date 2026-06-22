@@ -1,0 +1,312 @@
+:root {
+  --bg: #0c0a09;
+  --surface: #1c1917;
+  --surface-2: #292524;
+  --border: #44403c;
+  --text: #f5f5f4;
+  --text-dim: #a8a29e;
+  --accent: #00b4d8;
+  --accent-hover: #0096c7;
+  --danger: #ef4444;
+  --warning: #f4845f;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+}
+
+header h1 {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+header .meta {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+button {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+button:hover {
+  background: var(--border);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #00171f;
+  font-weight: 500;
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+button.danger {
+  background: var(--surface-2);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: var(--danger);
+  color: var(--text);
+}
+
+main {
+  flex: 1;
+  padding: 24px 32px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+section {
+  margin-bottom: 40px;
+}
+
+section h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.badge {
+  background: var(--surface-2);
+  color: var(--text-dim);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.empty {
+  color: var(--text-dim);
+  font-style: italic;
+  padding: 24px;
+  text-align: center;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px dashed var(--border);
+}
+
+/* 活跃台风卡片网格 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card.disturbance {
+  border-style: dashed;
+}
+
+.card .title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.card .id-tag {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+}
+
+.card .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.card .tag {
+  background: var(--surface-2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.card .tag.kind-storm {
+  background: rgba(0, 180, 216, 0.15);
+  color: var(--accent);
+}
+
+.card .tag.kind-disturbance {
+  background: rgba(244, 132, 95, 0.15);
+  color: var(--warning);
+}
+
+.card .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* 已关注台风区 */
+.storm-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.storm-block .header-row {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.storm-block .header-row .info {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.storm-block .header-row h3 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.storm-block .header-row .info-extra {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.storm-block .header-row .last-updated {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+table th, table td {
+  padding: 8px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+table th {
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 12px;
+  position: sticky;
+  top: 0;
+}
+
+table td.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+table tr.forecast {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+table tr.latest {
+  background: rgba(0, 180, 216, 0.08);
+}
+
+.code-badge {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  background: var(--surface-2);
+}
+
+.scroll-wrap {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+footer {
+  padding: 16px 32px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
+}

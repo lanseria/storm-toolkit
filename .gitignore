@@ -1,0 +1,20 @@
+# 运行时数据
+data/
+outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+
+# 环境
+.env
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store

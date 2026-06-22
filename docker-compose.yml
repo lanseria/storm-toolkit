@@ -1,0 +1,31 @@
+services:
+  scheduler:
+    build: .
+    pull_policy: never
+    image: storm-toolkit
+    container_name: storm-scheduler
+    restart: unless-stopped
+    command: ["--schedule"]
+    volumes:
+      - storm-data:/app/data
+    env_file:
+      - .env
+
+  web:
+    build: .
+    pull_policy: never
+    image: storm-toolkit
+    container_name: storm-web
+    restart: unless-stopped
+    command: ["--web"]
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    volumes:
+      - storm-data:/app/data
+    env_file:
+      - .env
+    depends_on:
+      - scheduler
+
+volumes:
+  storm-data:

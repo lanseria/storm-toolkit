@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storm Toolkit</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Storm Toolkit</h1>
+    <div class="meta">
+      <span id="last-updated">活跃列表尚未获取</span>
+      <button id="refresh-btn" type="button">刷新</button>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>当前活跃台风 <span id="active-count" class="badge">0</span></h2>
+      <div id="storm-grid" class="grid">
+        <div class="empty">加载中...</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>已关注台风路径 <span id="watched-count" class="badge">0</span></h2>
+      <div id="watched-container">
+        <div class="empty">尚未关注任何台风。点击上方卡片中的「关注」按钮开始记录路径。</div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>数据源：<a href="https://zoom.earth/" target="_blank" rel="noopener">zoom.earth</a></span>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
