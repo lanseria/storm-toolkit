@@ -1,4 +1,6 @@
 services:
+  # 定时同步：每小时（SCHEDULE_INTERVAL_SECONDS 默认 3600）合并 zoom.earth + CMA 数据；
+  # 检测到台风已消亡时自动归档到 data/history/，仅保留实况路径
   scheduler:
     build: .
     pull_policy: never
@@ -7,10 +9,11 @@ services:
     restart: unless-stopped
     command: ["--schedule"]
     volumes:
-      - storm-data:/app/data
+      - ${DATA_HOST_DIR:-./data}:/app/data
     env_file:
       - .env
 
+  # Web 服务：渲染活跃台风 / 关注列表 / 实况与多源预测 / 历史归档
   web:
     build: .
     pull_policy: never
@@ -19,13 +22,10 @@ services:
     restart: unless-stopped
     command: ["--web"]
     ports:
-      - "${WEB_PORT:-8000}:8000"
+      - "${WEB_PORT:-19995}:19995"
     volumes:
-      - storm-data:/app/data
+      - ${DATA_HOST_DIR:-./data}:/app/data
     env_file:
       - .env
     depends_on:
       - scheduler
-
-volumes:
-  storm-data:

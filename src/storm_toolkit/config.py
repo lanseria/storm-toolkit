@@ -15,6 +15,7 @@ if dotenv_path.exists():
 
 DATA_DIR: Path = PROJECT_ROOT.parent / "data"
 TRACKS_DIR: Path = DATA_DIR / "tracks"
+HISTORY_DIR: Path = DATA_DIR / "history"
 WATCHLIST_PATH: Path = DATA_DIR / "watchlist.json"
 ACTIVE_STORMS_PATH: Path = DATA_DIR / "storms_active.json"
 
@@ -25,7 +26,7 @@ def track_file_for_storm(storm_id: str) -> Path:
     return TRACKS_DIR / f"{safe}.json"
 
 
-for _d in (DATA_DIR, TRACKS_DIR):
+for _d in (DATA_DIR, TRACKS_DIR, HISTORY_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # ── zoom.earth 数据源 ────────────────────────────────────────────────────
@@ -38,13 +39,27 @@ HTTP_HEADERS: dict[str, str] = {
 }
 HTTP_TIMEOUT: int = int(os.getenv("HTTP_TIMEOUT", "15"))
 
+# ── 浙江水利厅 CMA 数据源 ────────────────────────────────────────────────
+ZJ_CMA_BASE: str = os.getenv("ZJ_CMA_BASE", "https://typhoon.slt.zj.gov.cn")
+ZJ_CMA_ACTIVITY_API: str = f"{ZJ_CMA_BASE}/Api/TyhoonActivity"
+ZJ_CMA_INFO_API: str = f"{ZJ_CMA_BASE}/Api/TyphoonInfo"  # 拼接 /{tfid}
+ZJ_CMA_HEADERS: dict[str, str] = {
+    "User-Agent": HTTP_HEADERS["User-Agent"],
+    "Referer": f"{ZJ_CMA_BASE}/",
+    "Accept": "application/json",
+}
+# CMA 接口偶发不稳定，env 可快速回退到纯 zoom 模式
+CMA_ENABLED: bool = os.getenv("CMA_ENABLED", "1") == "1"
+# 每个 source 保留的最近预测批数（防止文件膨胀，每 3h 一发，4 批≈12h）
+FORECAST_BATCHES_KEEP: int = int(os.getenv("FORECAST_BATCHES_KEEP", "4"))
+
 # ── 调度 ───────────────────────────────────────────────────────────────
-SCHEDULE_INTERVAL_SECONDS: int = int(os.getenv("SCHEDULE_INTERVAL_SECONDS", "1800"))
-ACTIVE_LIST_REFRESH_SECONDS: int = int(os.getenv("ACTIVE_LIST_REFRESH_SECONDS", "1800"))
+SCHEDULE_INTERVAL_SECONDS: int = int(os.getenv("SCHEDULE_INTERVAL_SECONDS", "3600"))
+ACTIVE_LIST_REFRESH_SECONDS: int = int(os.getenv("ACTIVE_LIST_REFRESH_SECONDS", "3600"))
 
 # ── Web ────────────────────────────────────────────────────────────────
 WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
-WEB_PORT: int = int(os.getenv("WEB_PORT", "8000"))
+WEB_PORT: int = int(os.getenv("WEB_PORT", "19995"))
 
 # ── 时区 ───────────────────────────────────────────────────────────────
 BEIJING_TZ = timezone(timedelta(hours=8))

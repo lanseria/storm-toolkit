@@ -55,7 +55,7 @@ cp .env.example .env
 | `SCHEDULE_INTERVAL_SECONDS` | 定时同步间隔（秒） | `1800` |
 | `ACTIVE_LIST_REFRESH_SECONDS` | 活跃列表刷新间隔（秒） | `1800` |
 | `WEB_HOST` | Web 服务监听地址 | `0.0.0.0` |
-| `WEB_PORT` | Web 服务端口 | `8000` |
+| `WEB_PORT` | Web 服务端口 | `19995` |
 | `HTTP_TIMEOUT` | HTTP 请求超时（秒） | `15` |
 
 ## 使用
@@ -77,7 +77,7 @@ python -m src.storm_toolkit.main --list
 python -m src.storm_toolkit.main --port 9000
 ```
 
-打开浏览器访问 http://localhost:8000：
+打开浏览器访问 http://localhost:19995：
 
 - 顶部显示当前活跃台风卡片，每张卡有「关注」/「取消关注」按钮
 - 关注后，对应台风会立即抓取详情并出现在下方「已关注台风路径」区
@@ -94,7 +94,7 @@ docker compose logs -f web
 `docker-compose.yml` 同时启动两个服务：
 
 - `storm-scheduler`：后台运行 `--schedule`
-- `storm-web`：前台运行 `--web`，映射 `${WEB_PORT:-8000}:8000`
+- `storm-web`：前台运行 `--web`，映射 `${WEB_PORT:-19995}:19995`
 
 两者通过共享的 `storm-data` 卷交换 JSON 数据。
 
