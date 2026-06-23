@@ -326,8 +326,13 @@ def append_storm_track(detail: StormDetail) -> int:
 
 
 # ── helpers ────────────────────────────────────────────────────────────
-def _atomic_write_json(path: Path, payload: dict) -> None:
-    """原子写入 JSON：先写到临时文件再 rename。"""
+def _atomic_write_json(path: Path, payload: dict, mode: int = 0o644) -> None:
+    """原子写入 JSON：先写到临时文件再 rename。
+
+    Args:
+        mode: 目标文件权限模式。默认 0o644（other 可读，宿主机 nginx 等可消费）。
+            POSIX 上 tempfile.mkstemp 默认 0o600 会导致非 root 进程读不到。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(
         prefix=path.name + ".", suffix=".tmp", dir=str(path.parent)
@@ -336,6 +341,7 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
+        os.chmod(tmp_path, mode)
         os.replace(tmp_path, path)
     except Exception:
         Path(tmp_path).unlink(missing_ok=True)
