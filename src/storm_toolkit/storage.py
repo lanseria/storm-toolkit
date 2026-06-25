@@ -138,6 +138,11 @@ def save_storm_detail(
         "season": detail["season"],
         "agencies": detail["agencies"],
     })
+    # 中文名：detail 提供 非""则覆盖；为空则保留已有（避免被空覆盖）
+    if detail.get("name_cn"):
+        info["name_cn"] = detail["name_cn"]
+    elif "name_cn" not in info:
+        info["name_cn"] = ""
     if cma_tfid is not None:
         info["cma_tfid"] = cma_tfid
     elif "cma_tfid" not in info:

@@ -193,6 +193,9 @@ class ZJCmaProvider(StormProvider):
             for group in point.get("forecast", []) or []:
                 tm = str(group.get("tm", "")).strip()
                 source = _slugify_tm(tm)
+                # 跳过 JMA（zoom.earth 已贡献 JMA 预测，避免重复）
+                if source == "jma":
+                    continue
                 fps = group.get("forecastpoints", []) or []
                 if len(fps) < 2:
                     continue
@@ -235,6 +238,7 @@ class ZJCmaProvider(StormProvider):
         detail: StormDetail = {
             "id": f"cma-{tfid}",
             "name": str(payload.get("enname", "") or payload.get("name", "") or tfid),
+            "name_cn": str(payload.get("name", "") or ""),
             "title": f"CMA Typhoon {payload.get('enname') or tfid} ({tfid})",
             "type": "Typhoon" if forecasts else "Unknown",
             "active": str(payload.get("isactive", "0")) == "1",

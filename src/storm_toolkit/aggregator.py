@@ -61,6 +61,9 @@ def _fetch_zoom_with_cma(storm_id: str) -> tuple[StormDetail | None, str | None]
         cma_detail = ZJCmaProvider().fetch_detail(cma_tfid)
         if cma_detail is not None:
             zoom["forecasts"].extend(cma_detail["forecasts"])
+            # 用 CMA 的中文名补全 zoom detail（zoom.earth 无中文名）
+            if cma_detail.get("name_cn"):
+                zoom["name_cn"] = cma_detail["name_cn"]
             logger.info(
                 f"[aggregator] 合并成功: zoom + cma({cma_tfid}) "
                 f"共 {len(zoom['forecasts'])} 批预测"

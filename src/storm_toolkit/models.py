@@ -63,6 +63,7 @@ class StormDetail(TypedDict):
 
     id: str
     name: str
+    name_cn: str              # 中文名（来自 CMA payload.name），无则空串
     title: str
     type: str
     active: bool

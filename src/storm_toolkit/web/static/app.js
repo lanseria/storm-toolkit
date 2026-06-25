@@ -5,9 +5,8 @@ const ACTIVE_REFRESH_MS = 5 * 60 * 1000;
 const $ = (id) => document.getElementById(id);
 
 const SOURCE_LABEL = {
-  "zoom-earth": "zoom.earth",
-  "cma": "中国气象局",
   "jma": "日本气象厅",
+  "cma": "中国气象局",
   "jtwc": "美国联合台风警报中心",
   "cwa": "台湾中央气象署",
   "hko": "香港天文台",
@@ -218,13 +217,14 @@ function renderStormBlock(t) {
   const cmaTag = info.cma_tfid
     ? `<span class="info-extra">CMA 编号: ${escapeHtml(info.cma_tfid)}</span>`
     : "";
+  const nameCNPrefix = info.name_cn ? `${escapeHtml(info.name_cn)} · ` : "";
 
   return `
     <div class="storm-block">
       <div class="header-row">
         <div>
           <div class="info">
-            <h3>${escapeHtml(info.title || t.id)}</h3>
+            <h3>${nameCNPrefix}${escapeHtml(info.title || t.id)}</h3>
             <span class="info-extra">
               ${escapeHtml(info.type || "")} · ${escapeHtml(info.agencies || "")}
               · ${escapeHtml(info.season || "")}
@@ -245,7 +245,7 @@ function renderStormBlock(t) {
       </div>
       <div class="sub-section">
         <div class="sub-title">
-          <span class="src-tag zoom-earth">zoom.earth</span>
+          <span class="src-tag jma">日本气象厅</span>
           <span>实况路径</span>
         </div>
         <div class="scroll-wrap">
@@ -326,7 +326,7 @@ async function toggleHistoryDetail(stormId, btn) {
     slot.innerHTML = `
       <div class="sub-section">
         <div class="sub-title">
-          <span class="src-tag zoom-earth">zoom.earth</span>
+          <span class="src-tag jma">日本气象厅</span>
           <span>实况路径（历史）</span>
         </div>
         <div class="scroll-wrap short">
