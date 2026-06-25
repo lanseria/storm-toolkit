@@ -29,7 +29,7 @@ class TrackPoint(TypedDict):
     pressure: int             # 气压（hPa）
     code: str                 # "D"/"S"/"1"/"2"/"3"/"4"/"5"
     description: str          # 原文描述（zoom 英文 / cma 中文）
-    source: str               # 实况点来源（当前仅 "zoom-earth"）
+    source: str               # 实况点来源（zoom.earth 数据本身来自 JTWC，当前仅 "jtwc"）
 
 
 class TrackHistoryEntry(TrackPoint):

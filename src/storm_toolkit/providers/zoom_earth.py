@@ -136,14 +136,14 @@ class ZoomEarthProvider(StormProvider):
             if bool(raw.get("forecast", False)):
                 forecast_points.append(point)  # type: ignore[arg-type]
             else:
-                track.append({**point, "source": "jma"})  # type: ignore[typeddict-item]
+                track.append({**point, "source": "jtwc"})  # type: ignore[typeddict-item]
 
         # zoom.earth 没有显式的"发布时间"，用抓取时刻当作本批 issued_at
-        # source 标记为 jma：zoom.earth 的预测数据本身来自 JMA
+        # source 标记为 jtwc：zoom.earth 的预测数据本身来自 JTWC
         forecasts: list[ForecastBatch] = []
         if forecast_points:
             forecasts.append({
-                "source": "jma",
+                "source": "jtwc",
                 "issued_at": fetched_at,
                 "points": forecast_points,
             })

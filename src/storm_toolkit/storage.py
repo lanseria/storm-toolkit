@@ -118,6 +118,39 @@ def save_active_storms(summaries: list[StormSummary]) -> None:
     _atomic_write_json(config.ACTIVE_STORMS_PATH, payload)
 
 
+def purge_runtime_data() -> dict:
+    """清空运行时数据：删除 storms_active.json 与 tracks/*.json。
+
+    保留：
+        - watchlist.json：用户关注的 ID 集合，下次 schedule 周期会重新抓取详情
+        - history/*.json：已归档的消亡台风，属于历史记录
+
+    Returns:
+        {"active_cleared": bool, "tracks_removed": int}
+    """
+    active_cleared = False
+    if config.ACTIVE_STORMS_PATH.exists():
+        try:
+            config.ACTIVE_STORMS_PATH.unlink()
+            active_cleared = True
+        except OSError as e:
+            logger.warning(f"删除 {config.ACTIVE_STORMS_PATH.name} 失败: {e}")
+
+    tracks_removed = 0
+    for path in config.TRACKS_DIR.glob("*.json"):
+        try:
+            path.unlink()
+            tracks_removed += 1
+        except OSError as e:
+            logger.warning(f"删除 {path.name} 失败: {e}")
+
+    logger.info(
+        f"已清空运行时数据：active={'yes' if active_cleared else 'no'}, "
+        f"tracks={tracks_removed} 个文件"
+    )
+    return {"active_cleared": active_cleared, "tracks_removed": tracks_removed}
+
+
 def load_active_storms() -> dict:
     """读取活跃台风列表缓存。文件不存在时返回空结构。"""
     if not config.ACTIVE_STORMS_PATH.exists():

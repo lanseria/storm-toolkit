@@ -193,8 +193,8 @@ class ZJCmaProvider(StormProvider):
             for group in point.get("forecast", []) or []:
                 tm = str(group.get("tm", "")).strip()
                 source = _slugify_tm(tm)
-                # 跳过 JMA（zoom.earth 已贡献 JMA 预测，避免重复）
-                if source == "jma":
+                # 跳过 JTWC（zoom.earth 已贡献 JTWC 预测，避免重复）
+                if source == "jtwc":
                     continue
                 fps = group.get("forecastpoints", []) or []
                 if len(fps) < 2:

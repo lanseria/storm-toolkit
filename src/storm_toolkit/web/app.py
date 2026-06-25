@@ -19,6 +19,7 @@ from ..storage import (
     load_storm_track,
     load_watchlist,
     list_watched_tracks,
+    purge_runtime_data,
     remove_from_watchlist,
     save_storm_detail,
 )
@@ -117,6 +118,16 @@ def api_history_detail(storm_id: str) -> JSONResponse:
     if h is None:
         raise HTTPException(status_code=404, detail=f"未找到归档 {storm_id}")
     return JSONResponse(h)
+
+
+@app.delete("/api/data")
+def api_purge_data() -> JSONResponse:
+    """清空运行时数据：storms_active.json + tracks/*.json。
+
+    保留 watchlist（关注的 ID 集合，下次 schedule 周期会重新抓取）与 history 归档。
+    """
+    result = purge_runtime_data()
+    return JSONResponse({"ok": True, **result})
 
 
 def run(host: str | None = None, port: int | None = None) -> None:

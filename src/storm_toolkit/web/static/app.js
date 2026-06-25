@@ -245,7 +245,7 @@ function renderStormBlock(t) {
       </div>
       <div class="sub-section">
         <div class="sub-title">
-          <span class="src-tag jma">日本气象厅</span>
+          <span class="src-tag jtwc">美国联合台风警报中心</span>
           <span>实况路径</span>
         </div>
         <div class="scroll-wrap">
@@ -326,7 +326,7 @@ async function toggleHistoryDetail(stormId, btn) {
     slot.innerHTML = `
       <div class="sub-section">
         <div class="sub-title">
-          <span class="src-tag jma">日本气象厅</span>
+          <span class="src-tag jtwc">美国联合台风警报中心</span>
           <span>实况路径（历史）</span>
         </div>
         <div class="scroll-wrap short">
@@ -350,6 +350,20 @@ $("refresh-btn").addEventListener("click", () => {
   loadActiveStorms();
   loadWatched();
   loadHistory();
+});
+
+$("purge-btn").addEventListener("click", async () => {
+  const msg = "确认清空运行数据？\n\n"
+    + "将删除：\n• storms_active.json（活跃列表缓存）\n• tracks/*.json（所有关注台风的实况与预测）\n\n"
+    + "保留：\n• watchlist.json（关注列表，下次定时同步会重新抓取）\n• history/（已归档台风）";
+  if (!confirm(msg)) return;
+  try {
+    const r = await fetchJson("/api/data", { method: "DELETE" });
+    alert(`已清空：${r.tracks_removed} 个 tracks 文件${r.active_cleared ? " + 活跃列表缓存" : ""}`);
+    await Promise.all([loadActiveStorms(), loadWatched(), loadHistory()]);
+  } catch (e) {
+    alert(`清空失败：${e.message}`);
+  }
 });
 
 loadActiveStorms();
