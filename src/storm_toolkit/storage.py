@@ -57,23 +57,55 @@ def save_watchlist(ids: set[str]) -> None:
 
 
 def add_to_watchlist(storm_id: str) -> None:
-    """加入关注列表（幂等）。"""
+    """加入关注列表（幂等），并同步刷新 storms_active.json 的 watched 字段。"""
     ids = load_watchlist()
     if storm_id in ids:
         return
     ids.add(storm_id)
     save_watchlist(ids)
+    sync_active_watched()
     logger.info(f"已关注: {storm_id}")
 
 
 def remove_from_watchlist(storm_id: str) -> None:
-    """从关注列表移除（幂等）。"""
+    """从关注列表移除（幂等），并同步刷新 storms_active.json 的 watched 字段。"""
     ids = load_watchlist()
     if storm_id not in ids:
         return
     ids.discard(storm_id)
     save_watchlist(ids)
+    sync_active_watched()
     logger.info(f"已取消关注: {storm_id}")
+
+
+def sync_active_watched() -> int:
+    """根据当前 watchlist 同步刷新 storms_active.json 中每个 storm 的 watched 字段。
+
+    watchlist 是 web 进程独占写，但 storms_active.json 由 schedule 周期写入；
+    若用户关注/取消关注后不刷盘，文件中的 watched 会与接口实时计算结果不一致。
+    此函数读取最新 watchlist，把 active 缓存里每个条目的 watched 校正并原子落盘。
+
+    Returns:
+        实际发生变化的条目数（文件不存在返回 0）。
+    """
+    if not config.ACTIVE_STORMS_PATH.exists():
+        return 0
+    watched = load_watchlist()
+    try:
+        data = json.loads(config.ACTIVE_STORMS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        logger.warning(f"同步 watched 时读取 {config.ACTIVE_STORMS_PATH.name} 失败: {e}")
+        return 0
+
+    changed = 0
+    for s in data.get("storms", []):
+        new_val = s.get("id") in watched
+        if s.get("watched") != new_val:
+            s["watched"] = new_val
+            changed += 1
+    if changed:
+        _atomic_write_json(config.ACTIVE_STORMS_PATH, data)
+    return changed
 
 
 # ── active storms cache ────────────────────────────────────────────────
