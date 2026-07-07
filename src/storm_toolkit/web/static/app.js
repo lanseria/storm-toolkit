@@ -240,6 +240,7 @@ function renderStormBlock(t) {
           </div>
         </div>
         <div class="actions">
+          <button type="button" onclick="generateSatellite('${escapeHtml(t.id)}', 'track', this)">生成卫星图</button>
           <button type="button" class="danger" onclick="unwatch('${escapeHtml(t.id)}')">取消关注</button>
         </div>
       </div>
@@ -299,6 +300,7 @@ function renderHistorySummary(h) {
           </div>
         </div>
         <div class="actions">
+          <button type="button" onclick="generateSatellite('${escapeHtml(h.id)}', 'history', this)">生成卫星图</button>
           <button type="button" onclick="toggleHistoryDetail('${escapeHtml(h.id)}', this)">展开路径</button>
         </div>
       </div>
@@ -344,6 +346,83 @@ async function toggleHistoryDetail(stormId, btn) {
     slot.innerHTML = `<div class="empty">加载失败：${escapeHtml(e.message)}</div>`;
     slot.hidden = false;
   }
+}
+
+// ── 卫星图生成 ──────────────────────────────────────────────────────────
+async function generateSatellite(stormId, source, btn) {
+  const originalText = btn ? btn.textContent : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "启动中...";
+  }
+  try {
+    const r = await fetchJson(
+      `/api/satellite/${encodeURIComponent(stormId)}?source=${source}`,
+      { method: "POST" },
+    );
+    if (r.cached) {
+      // 归档命中缓存，直接下载
+      downloadZip(stormId);
+      if (btn) {
+        btn.textContent = "已下载缓存";
+        setTimeout(() => { btn.disabled = false; btn.textContent = originalText; }, 2000);
+      }
+      return;
+    }
+    if (r.task_id) {
+      pollSatelliteTask(r.task_id, stormId, btn, originalText);
+      return;
+    }
+    throw new Error("服务器未返回任务 ID");
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+    alert(`生成卫星图失败：${e.message}`);
+  }
+}
+
+function pollSatelliteTask(taskId, stormId, btn, originalText) {
+  const interval = setInterval(async () => {
+    try {
+      const t = await fetchJson(`/api/satellite/tasks/${taskId}`);
+      if (t.status === "running") {
+        if (btn) {
+          btn.textContent = `生成中 ${t.current}/${t.total || "?"}`;
+        }
+        return;
+      }
+      clearInterval(interval);
+      if (t.status === "done") {
+        if (btn) {
+          btn.textContent = "已完成，下载中...";
+        }
+        downloadZip(stormId);
+        if (btn) {
+          setTimeout(() => { btn.disabled = false; btn.textContent = originalText; }, 2500);
+        }
+      } else {
+        // error
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+        alert(`生成卫星图失败：${t.error || "未知错误"}`);
+      }
+    } catch (e) {
+      clearInterval(interval);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+      alert(`查询进度失败：${e.message}`);
+    }
+  }, 1500);
+}
+
+function downloadZip(stormId) {
+  window.location.href = `/api/satellite/${encodeURIComponent(stormId)}.zip`;
 }
 
 $("refresh-btn").addEventListener("click", () => {

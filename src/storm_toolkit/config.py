@@ -16,6 +16,7 @@ if dotenv_path.exists():
 DATA_DIR: Path = PROJECT_ROOT.parent / "data"
 TRACKS_DIR: Path = DATA_DIR / "tracks"
 HISTORY_DIR: Path = DATA_DIR / "history"
+SATELLITE_DIR: Path = DATA_DIR / "satellite"
 WATCHLIST_PATH: Path = DATA_DIR / "watchlist.json"
 ACTIVE_STORMS_PATH: Path = DATA_DIR / "storms_active.json"
 
@@ -26,7 +27,7 @@ def track_file_for_storm(storm_id: str) -> Path:
     return TRACKS_DIR / f"{safe}.json"
 
 
-for _d in (DATA_DIR, TRACKS_DIR, HISTORY_DIR):
+for _d in (DATA_DIR, TRACKS_DIR, HISTORY_DIR, SATELLITE_DIR):
     _d.mkdir(parents=True, exist_ok=True)
 
 # ── zoom.earth 数据源 ────────────────────────────────────────────────────
@@ -60,6 +61,22 @@ ACTIVE_LIST_REFRESH_SECONDS: int = int(os.getenv("ACTIVE_LIST_REFRESH_SECONDS", 
 # ── Web ────────────────────────────────────────────────────────────────
 WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT: int = int(os.getenv("WEB_PORT", "19995"))
+
+# ── 卫星图生成 ──────────────────────────────────────────────────────────
+# GIS 服务器地址（同 zoom-earth-map 的 NUXT_PUBLIC_GIS_SERVER_URL）
+GIS_SERVER_URL: str = os.getenv("GIS_SERVER_URL", "http://bmcr1-wtr-r1:8080")
+# 贴图 zoom 级别（zoom-earth-map 卫星贴图 maxzoom=7）
+SATELLITE_TILE_ZOOM: int = int(os.getenv("SATELLITE_TILE_ZOOM", "7"))
+# 单张卫星图边长（px），正方形输出；后续可自定义手机/电脑比例
+SATELLITE_IMAGE_SIZE: int = int(os.getenv("SATELLITE_IMAGE_SIZE", "1080"))
+# 贴图并发下载数
+SATELLITE_TILE_WORKERS: int = int(os.getenv("SATELLITE_TILE_WORKERS", "8"))
+# smiley-sans 字体下载地址（国内经 ghfast.top 加速）
+FONT_DOWNLOAD_URL: str = os.getenv(
+    "FONT_DOWNLOAD_URL",
+    "https://ghfast.top/https://github.com/atelier-anchor/smiley-sans/"
+    "releases/download/v2.0.1/smiley-sans-v2.0.1.zip",
+)
 
 # ── 时区 ───────────────────────────────────────────────────────────────
 BEIJING_TZ = timezone(timedelta(hours=8))

@@ -4,13 +4,15 @@
 关注列表通过 data/watchlist.json 与 schedule 进程共享。
 """
 
+import threading
+import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .. import aggregator, config
+from .. import aggregator, config, imagery
 from ..storage import (
     add_to_watchlist,
     list_history,
@@ -118,6 +120,107 @@ def api_history_detail(storm_id: str) -> JSONResponse:
     if h is None:
         raise HTTPException(status_code=404, detail=f"未找到归档 {storm_id}")
     return JSONResponse(h)
+
+
+# ── 卫星图生成 ──────────────────────────────────────────────────────────
+def _satellite_zip_path(storm_id: str) -> Path:
+    safe = storm_id.replace("/", "_")
+    return config.SATELLITE_DIR / f"{safe}.zip"
+
+
+def _load_track_for_satellite(storm_id: str, source: str) -> dict | None:
+    """按 source 加载台风数据。auto 时优先 track，其次 history。"""
+    if source == "track":
+        return load_storm_track(storm_id)
+    if source == "history":
+        return load_history_storm(storm_id)
+    # auto
+    return load_storm_track(storm_id) or load_history_storm(storm_id)
+
+
+@app.post("/api/satellite/{storm_id}")
+def api_satellite_generate(
+    storm_id: str,
+    source: str = Query("auto", pattern="^(auto|track|history)$"),
+) -> JSONResponse:
+    """启动卫星图生成任务。
+
+    - source=auto: 优先 tracks，其次 history
+    - 归档台风且 zip 已存在 → 直接返回 cached
+    - 进行中台风 → 每次都重新生成（覆盖旧 zip）
+    """
+    track_data = _load_track_for_satellite(storm_id, source)
+    if track_data is None:
+        raise HTTPException(status_code=404, detail=f"未找到台风 {storm_id} 的数据")
+
+    is_history = source == "history" or (
+        source == "auto" and load_storm_track(storm_id) is None
+    )
+    zip_path = _satellite_zip_path(storm_id)
+
+    # 归档台风：zip 已存在则命中缓存
+    if is_history and zip_path.exists():
+        return JSONResponse({
+            "ok": True,
+            "cached": True,
+            "id": storm_id,
+            "zip_url": f"/api/satellite/{storm_id}.zip",
+        })
+
+    # 启动后台任务
+    task_id = uuid.uuid4().hex
+    size = config.SATELLITE_IMAGE_SIZE
+    thread = threading.Thread(
+        target=imagery.run_generation_task,
+        args=(task_id, storm_id, track_data, zip_path, size),
+        daemon=True,
+    )
+    thread.start()
+    return JSONResponse({
+        "ok": True,
+        "cached": False,
+        "id": storm_id,
+        "task_id": task_id,
+        "status": "running",
+    })
+
+
+@app.get("/api/satellite/tasks/{task_id}")
+def api_satellite_task(task_id: str) -> JSONResponse:
+    """轮询卫星图生成任务进度。"""
+    state = imagery.get_task(task_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"未找到任务 {task_id}")
+    progress = 0.0
+    if state.total > 0:
+        progress = round(state.current / state.total, 3)
+    return JSONResponse({
+        "task_id": task_id,
+        "storm_id": state.storm_id,
+        "status": state.status,
+        "current": state.current,
+        "total": state.total,
+        "progress": progress,
+        "error": state.error,
+        "zip_url": (
+            f"/api/satellite/{state.storm_id}.zip"
+            if state.status == "done" else None
+        ),
+    })
+
+
+@app.get("/api/satellite/{storm_id}.zip")
+def api_satellite_download(storm_id: str) -> FileResponse:
+    """下载已生成的卫星图 zip。"""
+    zip_path = _satellite_zip_path(storm_id)
+    if not zip_path.exists():
+        raise HTTPException(status_code=404, detail=f"卫星图尚未生成 {storm_id}")
+    safe = storm_id.replace("/", "_")
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=f"{safe}_satellite.zip",
+    )
 
 
 @app.delete("/api/data")

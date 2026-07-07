@@ -2,6 +2,9 @@
 data/
 outputs/
 
+# 运行时下载的字体（smiley-sans）
+src/storm_toolkit/assets/fonts/
+
 # Python
 __pycache__/
 *.pyc
