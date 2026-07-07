@@ -162,11 +162,14 @@ def interpolate_track(
     if not track_history:
         return None
 
-    pts = sorted(
-        (_parse_iso_z(p["date"]), p) for p in track_history if p.get("date")
-    )
-    if not pts:
+    # 用 key 排序而非元组比较：当多个点时间相同时，元组 (datetime, dict) 会
+    # 退化到比较 dict（不支持 <）而抛 TypeError。key 函数只比 datetime。
+    valid = [p for p in track_history if p.get("date")]
+    valid.sort(key=lambda p: _parse_iso_z(p["date"]))
+    if not valid:
         return None
+
+    pts = [(_parse_iso_z(p["date"]), p) for p in valid]
 
     target = target_dt.astimezone(UTC)
     if target < pts[0][0] or target > pts[-1][0]:
