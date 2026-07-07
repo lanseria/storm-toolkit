@@ -41,22 +41,61 @@ SATELLITES: list[dict[str, Any]] = [
     {"id": "himawari", "name": "Himawari", "bounds": [90, -60, 180, 60]},
 ]
 
-# 强度 code → 颜色（参考 docs/maplibre-data-usage.md 配色，rgb 元组）
-CODE_COLOR: dict[str, tuple[int, int, int]] = {
-    "D": (160, 160, 160),   # 热带低压 — 灰
-    "S": (0, 0, 255),       # 热带风暴 — 蓝
-    "SS": (0, 255, 255),    # 强热带风暴 — 青
-    "1": (0, 255, 0),       # 台风 — 绿
-    "2": (255, 255, 0),     # 强台风 — 黄
-    "3": (255, 165, 0),     # 超强台风 — 橙
-    "4": (255, 0, 0),       # 超强台风 — 红
-    "5": (180, 0, 180),     # 超强台风 — 紫
-    "T": (0, 255, 0),       # JMA Typhoon
-    "ST": (255, 165, 0),    # JMA Very Strong Typhoon
-    "VT": (255, 0, 0),      # JMA Violent Typhoon
-    "E": (160, 160, 160),   # 温带气旋
+# ── 台风等级 / 机构 配色（照搬 D:\code\zoom-earth-map） ─────────────────
+# 来源：app/composables/useStormOverlay.ts STORM_COLOR_BY_CODE（第 37-50 行）
+#       app/components/TyphoonPanel.vue STORM_COLOR_BY_CODE（第 8-21 行）
+# 强度 code → 颜色 hex（与 zoom-earth-map 地图 overlay 完全一致）
+STORM_COLOR_BY_CODE: dict[str, str] = {
+    "D": "#0a84ff",   # 热带低压（蓝），同时是兜底默认色
+    "S": "#00f060",   # 热带风暴（亮绿）
+    "1": "#ffcc00",   # 强热带风暴（黄）
+    "SS": "#ffcc00",  # Severe Tropical Storm（强热带风暴）
+    "2": "#ff9400",   # 台风（橙）
+    "T": "#ff9400",   # Typhoon（台风）
+    "3": "#ff5900",   # 强台风（深橙红）
+    "ST": "#ff5900",  # Very Strong Typhoon（强台风）
+    "4": "#ff0022",   # 超强台风 / 暴力台风（红）
+    "VT": "#ff0022",  # Violent Typhoon（暴力台风）
+    "5": "#FF55BB",   # Cat 5（粉红）
+    "SU": "#FF55BB",  # 超级台风
+    "E": "#0a84ff",   # 温带气旋（与 D 同色，回退到默认蓝）
 }
-DEFAULT_CODE_COLOR = (0, 255, 0)
+
+# 来源：useStormOverlay.ts STORM_COLOR_BY_SOURCE（第 51-59 行）
+# 预测机构 source → 颜色 hex（预测线按机构着色）
+STORM_COLOR_BY_SOURCE: dict[str, str] = {
+    "zoom-earth": "#00b4d8",
+    "cma": "#f87171",
+    "jma": "#f4845f",
+    "jtwc": "#a3e635",
+    "cwa": "#60a5fa",
+    "hko": "#fbbf24",
+    "kma": "#a78bfa",
+}
+STORM_SOURCE_FALLBACK = "#94a3b8"  # 未知机构兜底色
+
+# 来源：useStormOverlay.ts 第 60-66 行（实况线 / 半径 等样式常量）
+STORM_ACTUAL_LINE_COLOR = "#fbbf24"  # 实况路径线统一琥珀色（不分等级）
+STORM_POINT_RADIUS = 5               # 实况圆点半径（地图像素，按图边长缩放后使用）
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """#RRGGBB → (r, g, b)。兼容大小写与前缀。"""
+    h = hex_color.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))  # type: ignore[return-value]
+
+
+def _storm_color(code: str | None, alpha: int = 255) -> tuple[int, int, int, int]:
+    """按强度 code 取 RGBA 颜色（与 zoom-earth-map 地图 overlay 一致）。"""
+    c = STORM_COLOR_BY_CODE.get((code or "").upper(), STORM_COLOR_BY_CODE["D"])
+    return _hex_to_rgb(c) + (alpha,)
+
+
+# 保留向后兼容别名（其他模块或外部脚本可能引用）
+CODE_COLOR = {k: _hex_to_rgb(v) for k, v in STORM_COLOR_BY_CODE.items()}
+DEFAULT_CODE_COLOR = _hex_to_rgb(STORM_COLOR_BY_CODE["D"])
 
 _FONT_PATH_CANDIDATES = [
     # 1. 项目运行时下载的 smiley-sans
@@ -416,17 +455,20 @@ def annotate_image(
     title_font = _load_font(max(22, size // 40))
     body_font = _load_font(max(18, size // 54))
 
-    # 中心十字标（台风中心）
+    # 中心十字标（台风中心）—— 按当前时刻强度着色（与 zoom-earth-map overlay 一致）
     cx, cy = size // 2, size // 2
-    mark_color = (255, 0, 0, 230)
+    mark_color = _storm_color(point.get("code"), alpha=240)
     arm = max(14, size // 60)
     draw.line([(cx - arm, cy), (cx + arm, cy)], fill=mark_color, width=3)
     draw.line([(cx, cy - arm), (cx, cy + arm)], fill=mark_color, width=3)
+    # 中心圆点：按 zoom-earth-map 样式 —— 白色描边 + 强度色填充
+    center_r = max(6, size // 90)
     draw.ellipse(
-        [(cx - 6, cy - 6), (cx + 6, cy + 6)], outline=mark_color, width=3
+        [(cx - center_r, cy - center_r), (cx + center_r, cy + center_r)],
+        outline=(255, 255, 255, 230), width=2,
     )
 
-    # 历史轨迹线（当前时刻之前的点）
+    # 历史轨迹线（当前时刻之前的点）—— 实况线琥珀色 + 圆点按强度着色
     _draw_track_line(draw, img.size, point, track_history, timestamp, zoom)
 
     # 信息面板（底部半透明黑底）
@@ -476,7 +518,11 @@ def _draw_track_line(
     current_ts: int,
     zoom: int,
 ) -> None:
-    """在图上绘制当前时刻之前的历史轨迹折线。"""
+    """在图上绘制当前时刻之前的历史轨迹折线（样式照搬 zoom-earth-map）。
+
+    - 实况线：统一琥珀色 #fbbf24，宽 3，不透明度 0.9（与 useStormOverlay.ts actualLines 一致）
+    - 圆点：按强度 code 着色（STORM_COLOR_BY_CODE），白色描边 1.5px（与 .storm-hit CSS 一致）
+    """
     size = img_size[0]
     half = size / 2.0
     center_lng = current_point["lng"]
@@ -484,7 +530,13 @@ def _draw_track_line(
     center_pix_x = lng2pix(center_lng, zoom)
     center_pix_y = lat2pix(center_lat, zoom)
 
-    pts: list[tuple[float, float]] = []
+    # 按图边长缩放样式参数（zoom-earth-map 在地图上是固定像素，卫星图按比例放大）
+    scale = size / 1080.0
+    point_r = max(3, round(STORM_POINT_RADIUS * scale))  # 地图 5px → 1080 图约 5px
+    line_width = max(2, round(3 * scale))
+    stroke_width = max(1, round(1.5 * scale))
+
+    pts: list[tuple[float, float, str | None]] = []
     for p in sorted(track_history, key=lambda x: x.get("date", "")):
         try:
             dt = _parse_iso_z(p["date"])
@@ -494,21 +546,26 @@ def _draw_track_line(
             break
         px = lng2pix(p["lng"], zoom) - center_pix_x + half
         py = lat2pix(p["lat"], zoom) - center_pix_y + half
-        pts.append((px, py, p.get("code", "")))
+        pts.append((px, py, p.get("code")))
 
     if len(pts) < 2:
         return
 
+    # 实况线：统一琥珀色（zoom-earth-map useStormOverlay.ts: STORM_ACTUAL_LINE_COLOR）
+    actual_line_color = _hex_to_rgb(STORM_ACTUAL_LINE_COLOR) + (230,)
     for i in range(1, len(pts)):
-        x0, y0, c0 = pts[i - 1]
+        x0, y0, _ = pts[i - 1]
         x1, y1, _ = pts[i]
-        color = CODE_COLOR.get(c0, DEFAULT_CODE_COLOR)
-        draw.line([(x0, y0), (x1, y1)], fill=color + (220,), width=3)
+        draw.line([(x0, y0), (x1, y1)], fill=actual_line_color, width=line_width)
 
-    # 历史点小圆点
-    for px, py, c in pts:
-        color = CODE_COLOR.get(c, DEFAULT_CODE_COLOR)
-        draw.ellipse([(px - 3, py - 3), (px + 3, py + 3)], fill=color + (220,))
+    # 历史圆点：按强度着色 + 白色描边（.storm-hit { stroke: rgba(255,255,255,0.9) }）
+    white_stroke = (255, 255, 255, 230)
+    for px, py, code in pts:
+        fill = _storm_color(code, alpha=255)
+        draw.ellipse(
+            [(px - point_r, py - point_r), (px + point_r, py + point_r)],
+            fill=fill, outline=white_stroke, width=stroke_width,
+        )
 
 
 # ── 主流程：拉时间戳 → 逐帧 → zip ─────────────────────────────────────
