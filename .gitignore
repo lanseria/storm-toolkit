@@ -2,8 +2,9 @@
 data/
 outputs/
 
-# 运行时下载的字体（smiley-sans）
+# 运行时下载的字体（smiley-sans）与国内边界缓存（DataV）
 src/storm_toolkit/assets/fonts/
+src/storm_toolkit/assets/boundaries/
 
 # Python
 __pycache__/

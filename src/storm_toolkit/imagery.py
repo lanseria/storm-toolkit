@@ -447,8 +447,18 @@ def annotate_image(
     size: int,
     generated_at: str,
 ) -> Image.Image:
-    """在卫星图上叠加台风信息、中心十字标与历史轨迹线。"""
+    """在卫星图上叠加边界/城市、台风信息、中心十字标与历史轨迹线。"""
     img = img.convert("RGBA")
+
+    # 边界与城市画在卫星图本体上（底层），让台风轨迹浮在其上方
+    try:
+        from . import boundaries
+        boundaries.draw_overlays(
+            img, point["lng"], point["lat"], zoom, size, _load_font
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"边界/城市叠加失败（忽略继续）：{e}")
+
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 

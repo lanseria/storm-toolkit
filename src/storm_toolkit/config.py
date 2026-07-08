@@ -78,6 +78,21 @@ FONT_DOWNLOAD_URL: str = os.getenv(
     "releases/download/v2.0.1/smiley-sans-v2.0.1.zip",
 )
 
+# ── 边界与城市叠加层（照搬 zoom-earth-map 样式） ───────────────────────
+ASSETS_DIR: Path = Path(__file__).resolve().parent / "assets"
+COASTLINE_PATH: Path = ASSETS_DIR / "ne_50m_coastline.geojson"
+CITIES_PATH: Path = ASSETS_DIR / "cities.json"
+BOUNDARIES_DIR: Path = ASSETS_DIR / "boundaries"
+# 阿里云 DataV 全国行政边界（含省界 Polygon）
+CHINA_BOUNDARY_URL: str = os.getenv(
+    "CHINA_BOUNDARY_URL",
+    "https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json",
+)
+CHINA_BOUNDARY_PATH: Path = BOUNDARIES_DIR / "100000_full.json"
+# 是否叠加边界与城市（1/0），默认开启
+OVERLAY_BOUNDARIES: bool = os.getenv("OVERLAY_BOUNDARIES", "1") == "1"
+OVERLAY_CITIES: bool = os.getenv("OVERLAY_CITIES", "1") == "1"
+
 # ── 时区 ───────────────────────────────────────────────────────────────
 BEIJING_TZ = timezone(timedelta(hours=8))
 UTC = timezone.utc
