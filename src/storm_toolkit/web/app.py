@@ -123,9 +123,10 @@ def api_history_detail(storm_id: str) -> JSONResponse:
 
 
 # ── 卫星图生成 ──────────────────────────────────────────────────────────
-def _satellite_zip_path(storm_id: str) -> Path:
+def _satellite_zip_path(storm_id: str, size_sig: str) -> Path:
+    """卫星图 zip 路径，文件名含尺寸签名以支持不同规格独立缓存。"""
     safe = storm_id.replace("/", "_")
-    return config.SATELLITE_DIR / f"{safe}.zip"
+    return config.SATELLITE_DIR / f"{safe}_{size_sig}.zip"
 
 
 def _load_track_for_satellite(storm_id: str, source: str) -> dict | None:
@@ -138,41 +139,64 @@ def _load_track_for_satellite(storm_id: str, source: str) -> dict | None:
     return load_storm_track(storm_id) or load_history_storm(storm_id)
 
 
+def _build_gen_config(
+    width: int, height: int, show_boundaries: bool, show_cities: bool,
+    city_font_scale: float,
+) -> imagery.GenConfig:
+    """根据请求参数构造 GenConfig，含边界校验。"""
+    w = max(256, min(4096, int(width)))
+    h = max(256, min(4096, int(height)))
+    scale = max(0.3, min(3.0, float(city_font_scale)))
+    return imagery.GenConfig(
+        width=w, height=h,
+        show_boundaries=show_boundaries,
+        show_cities=show_cities,
+        city_font_scale=scale,
+    )
+
+
 @app.post("/api/satellite/{storm_id}")
 def api_satellite_generate(
     storm_id: str,
     source: str = Query("auto", pattern="^(auto|track|history)$"),
+    width: int = Query(config.SATELLITE_IMAGE_SIZE, ge=256, le=4096),
+    height: int = Query(config.SATELLITE_IMAGE_SIZE, ge=256, le=4096),
+    show_boundaries: bool = Query(True),
+    show_cities: bool = Query(True),
+    city_font_scale: float = Query(1.0, ge=0.3, le=3.0),
 ) -> JSONResponse:
     """启动卫星图生成任务。
 
     - source=auto: 优先 tracks，其次 history
-    - 归档台风且 zip 已存在 → 直接返回 cached
+    - 归档台风且对应尺寸的 zip 已存在 → 直接返回 cached
     - 进行中台风 → 每次都重新生成（覆盖旧 zip）
     """
     track_data = _load_track_for_satellite(storm_id, source)
     if track_data is None:
         raise HTTPException(status_code=404, detail=f"未找到台风 {storm_id} 的数据")
 
+    gc = _build_gen_config(width, height, show_boundaries, show_cities, city_font_scale)
+
     is_history = source == "history" or (
         source == "auto" and load_storm_track(storm_id) is None
     )
-    zip_path = _satellite_zip_path(storm_id)
+    zip_path = _satellite_zip_path(storm_id, gc.size_sig)
 
-    # 归档台风：zip 已存在则命中缓存
+    # 归档台风：对应尺寸的 zip 已存在则命中缓存
     if is_history and zip_path.exists():
         return JSONResponse({
             "ok": True,
             "cached": True,
             "id": storm_id,
-            "zip_url": f"/api/satellite/{storm_id}.zip",
+            "size_sig": gc.size_sig,
+            "zip_url": f"/api/satellite/{storm_id}.zip?size_sig={gc.size_sig}",
         })
 
     # 启动后台任务
     task_id = uuid.uuid4().hex
-    size = config.SATELLITE_IMAGE_SIZE
     thread = threading.Thread(
         target=imagery.run_generation_task,
-        args=(task_id, storm_id, track_data, zip_path, size),
+        args=(task_id, storm_id, track_data, zip_path, gc),
         daemon=True,
     )
     thread.start()
@@ -180,6 +204,7 @@ def api_satellite_generate(
         "ok": True,
         "cached": False,
         "id": storm_id,
+        "size_sig": gc.size_sig,
         "task_id": task_id,
         "status": "running",
     })
@@ -194,33 +219,52 @@ def api_satellite_task(task_id: str) -> JSONResponse:
     progress = 0.0
     if state.total > 0:
         progress = round(state.current / state.total, 3)
+    # 任务记录其输出 zip 的尺寸签名（在 run_generation_task 里设置）
+    size_sig = getattr(state, "size_sig", "1080x1080")
     return JSONResponse({
         "task_id": task_id,
         "storm_id": state.storm_id,
+        "size_sig": size_sig,
         "status": state.status,
         "current": state.current,
         "total": state.total,
         "progress": progress,
         "error": state.error,
         "zip_url": (
-            f"/api/satellite/{state.storm_id}.zip"
+            f"/api/satellite/{state.storm_id}.zip?size_sig={size_sig}"
             if state.status == "done" else None
         ),
     })
 
 
 @app.get("/api/satellite/{storm_id}.zip")
-def api_satellite_download(storm_id: str) -> FileResponse:
-    """下载已生成的卫星图 zip。"""
-    zip_path = _satellite_zip_path(storm_id)
+def api_satellite_download(
+    storm_id: str,
+    size_sig: str = Query(..., pattern=r"^\d+x\d+$"),
+) -> FileResponse:
+    """下载已生成的卫星图 zip。size_sig 形如 1080x1080。"""
+    zip_path = _satellite_zip_path(storm_id, size_sig)
     if not zip_path.exists():
-        raise HTTPException(status_code=404, detail=f"卫星图尚未生成 {storm_id}")
+        raise HTTPException(status_code=404, detail=f"卫星图尚未生成 {storm_id} ({size_sig})")
     safe = storm_id.replace("/", "_")
     return FileResponse(
         zip_path,
         media_type="application/zip",
-        filename=f"{safe}_satellite.zip",
+        filename=f"{safe}_satellite_{size_sig}.zip",
     )
+
+
+@app.delete("/api/satellite/cache")
+def api_satellite_clear_cache() -> JSONResponse:
+    """清除所有已生成的卫星图 zip 缓存（data/satellite/*.zip）。"""
+    removed = 0
+    for path in config.SATELLITE_DIR.glob("*.zip"):
+        try:
+            path.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return JSONResponse({"ok": True, "removed": removed})
 
 
 @app.delete("/api/data")

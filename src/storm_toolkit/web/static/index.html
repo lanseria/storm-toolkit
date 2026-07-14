@@ -12,6 +12,7 @@
     <div class="meta">
       <span id="last-updated">活跃列表尚未获取</span>
       <button id="refresh-btn" type="button">刷新</button>
+      <button id="clear-sat-cache-btn" type="button">清除卫星图缓存</button>
       <button id="purge-btn" type="button" class="danger">清空运行数据</button>
     </div>
   </header>
@@ -38,6 +39,47 @@
       </div>
     </section>
   </main>
+
+  <!-- 卫星图生成配置弹窗 -->
+  <div id="sat-modal" class="modal" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card">
+      <h3 id="sat-modal-title">生成卫星图</h3>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>预设规格</label>
+          <div class="preset-btns">
+            <button type="button" data-w="1080" data-h="1080">方形 1080</button>
+            <button type="button" data-w="1920" data-h="1080">PC 横屏 1920×1080</button>
+            <button type="button" data-w="1080" data-h="1920">移动竖屏 1080×1920</button>
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="sat-width">宽度 (px)</label>
+            <input id="sat-width" type="number" min="256" max="4096" step="1" value="1080">
+          </div>
+          <div>
+            <label for="sat-height">高度 (px)</label>
+            <input id="sat-height" type="number" min="256" max="4096" step="1" value="1080">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="sat-font-scale">城市文字字号缩放</label>
+          <input id="sat-font-scale" type="range" min="0.3" max="3" step="0.1" value="1">
+          <span id="sat-font-scale-val" class="range-val">1.0×</span>
+        </div>
+        <div class="form-row checkboxes">
+          <label><input id="sat-show-boundaries" type="checkbox" checked> 叠加边界线</label>
+          <label><input id="sat-show-cities" type="checkbox" checked> 叠加城市点位</label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="sat-cancel">取消</button>
+        <button type="button" id="sat-confirm" class="primary">开始生成</button>
+      </div>
+    </div>
+  </div>
 
   <footer>
     <span>数据源：

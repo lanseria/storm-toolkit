@@ -357,3 +357,150 @@ footer a {
 footer a:hover {
   text-decoration: underline;
 }
+
+/* ── 卫星图配置弹窗 ──────────────────────────────────────────────────── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 480px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-card h3 {
+  padding: 18px 20px 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 16px 20px 4px;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-row > label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.form-row.two-col {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row.two-col > div {
+  flex: 1;
+}
+
+.form-row.two-col label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.preset-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-btns button {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.preset-btns button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #00171f;
+}
+
+input[type="number"],
+input[type="text"] {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+input[type="number"]:focus,
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.form-row input[type="range"] + .range-val {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent);
+  margin-left: 8px;
+  font-family: ui-monospace, monospace;
+}
+
+.form-row.checkboxes {
+  display: flex;
+  gap: 24px;
+}
+
+.form-row.checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  margin-bottom: 0;
+}
+
+.form-row.checkboxes input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+
+.modal-actions {
+  padding: 14px 20px 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}

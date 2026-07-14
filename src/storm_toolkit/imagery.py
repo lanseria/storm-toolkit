@@ -17,6 +17,7 @@ import os
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,25 @@ from . import config
 from .utils import BEIJING_TZ, UTC, setup_logger
 
 logger = setup_logger("storm_toolkit.imagery")
+
+
+@dataclass(frozen=True)
+class GenConfig:
+    """卫星图生成参数（贯穿整个调用链）。
+
+    所有尺寸均为像素。城市字号 None 表示用 boundaries.py 的默认值（按图缩放）。
+    """
+
+    width: int = 1080
+    height: int = 1080
+    show_boundaries: bool = True
+    show_cities: bool = True
+    city_font_scale: float = 1.0  # 城市标签字号缩放系数（1.0 = 默认）
+
+    @property
+    def size_sig(self) -> str:
+        """用于缓存文件名的尺寸签名，如 '1080x1080'。"""
+        return f"{self.width}x{self.height}"
 
 TILE_SIZE = 256
 
@@ -298,19 +318,21 @@ def build_frame(
     center_lat: float,
     timestamp: int,
     zoom: int,
-    size: int,
+    width: int,
+    height: int,
     fetcher: TileFetcher,
     session: requests.Session,
 ) -> Image.Image:
-    """以 (center_lng, center_lat) 为中心，拼接贴图并裁出 size×size 图片。"""
+    """以 (center_lng, center_lat) 为中心，拼接贴图并裁出 width×height 图片。"""
     cx = lng2pix(center_lng, zoom)
     cy = lat2pix(center_lat, zoom)
 
-    half = size / 2.0
-    x_min_pix = cx - half
-    y_min_pix = cy - half
-    x_max_pix = cx + half
-    y_max_pix = cy + half
+    half_w = width / 2.0
+    half_h = height / 2.0
+    x_min_pix = cx - half_w
+    y_min_pix = cy - half_h
+    x_max_pix = cx + half_w
+    y_max_pix = cy + half_h
 
     tx_min = max(0, int(math.floor(x_min_pix / TILE_SIZE)))
     tx_max = min(2 ** zoom - 1, int(math.floor(x_max_pix / TILE_SIZE)))
@@ -351,21 +373,21 @@ def build_frame(
         py = (ty - ty_min) * TILE_SIZE
         mosaic.paste(img, (px, py))
 
-    # 在大图坐标系中裁切 size×size
+    # 在大图坐标系中裁切 width×height
     offset_x = int(round(x_min_pix - tx_min * TILE_SIZE))
     offset_y = int(round(y_min_pix - ty_min * TILE_SIZE))
 
     # 边界保护：mosaic 可能比裁切框小（极端经纬度），用裁切框与 mosaic 求交
     crop_x0 = max(0, offset_x)
     crop_y0 = max(0, offset_y)
-    crop_x1 = min(mosaic_w, offset_x + size)
-    crop_y1 = min(mosaic_h, offset_y + size)
+    crop_x1 = min(mosaic_w, offset_x + width)
+    crop_y1 = min(mosaic_h, offset_y + height)
 
     cropped = mosaic.crop((crop_x0, crop_y0, crop_x1, crop_y1))
 
-    # 若裁出尺寸不足 size（贴图范围到边界），补黑边到 size×size
-    if cropped.size != (size, size):
-        canvas = Image.new("RGB", (size, size), (10, 10, 14))
+    # 若裁出尺寸不足（贴图范围到边界），补黑边到 width×height
+    if cropped.size != (width, height):
+        canvas = Image.new("RGB", (width, height), (10, 10, 14))
         paste_x = crop_x0 - offset_x
         paste_y = crop_y0 - offset_y
         canvas.paste(cropped, (paste_x, paste_y))
@@ -444,35 +466,40 @@ def annotate_image(
     timestamp: int,
     track_history: list[dict],
     zoom: int,
-    size: int,
+    gc: GenConfig,
     generated_at: str,
 ) -> Image.Image:
     """在卫星图上叠加边界/城市、台风信息、中心十字标与历史轨迹线。"""
+    width, height = gc.width, gc.height
     img = img.convert("RGBA")
 
     # 边界与城市画在卫星图本体上（底层），让台风轨迹浮在其上方
-    try:
-        from . import boundaries
-        boundaries.draw_overlays(
-            img, point["lng"], point["lat"], zoom, size, _load_font
-        )
-    except Exception as e:  # noqa: BLE001
-        logger.warning(f"边界/城市叠加失败（忽略继续）：{e}")
+    if gc.show_boundaries or gc.show_cities:
+        try:
+            from . import boundaries
+            boundaries.draw_overlays(
+                img, point["lng"], point["lat"], zoom, width, height,
+                _load_font, gc.show_boundaries, gc.show_cities, gc.city_font_scale,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"边界/城市叠加失败（忽略继续）：{e}")
 
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    title_font = _load_font(max(22, size // 40))
-    body_font = _load_font(max(18, size // 54))
+    # 用较长边作为字号基准（与正方形时视觉接近）
+    long_side = max(width, height)
+    title_font = _load_font(max(22, long_side // 40))
+    body_font = _load_font(max(18, long_side // 54))
 
     # 中心十字标（台风中心）—— 按当前时刻强度着色（与 zoom-earth-map overlay 一致）
-    cx, cy = size // 2, size // 2
+    cx, cy = width // 2, height // 2
     mark_color = _storm_color(point.get("code"), alpha=240)
-    arm = max(14, size // 60)
+    arm = max(14, long_side // 60)
     draw.line([(cx - arm, cy), (cx + arm, cy)], fill=mark_color, width=3)
     draw.line([(cx, cy - arm), (cx, cy + arm)], fill=mark_color, width=3)
     # 中心圆点：按 zoom-earth-map 样式 —— 白色描边 + 强度色填充
-    center_r = max(6, size // 90)
+    center_r = max(6, long_side // 90)
     draw.ellipse(
         [(cx - center_r, cy - center_r), (cx + center_r, cy + center_r)],
         outline=(255, 255, 255, 230), width=2,
@@ -482,10 +509,10 @@ def annotate_image(
     _draw_track_line(draw, img.size, point, track_history, timestamp, zoom)
 
     # 信息面板（底部半透明黑底）
-    panel_h = max(110, size // 7)
-    panel_y0 = size - panel_h
+    panel_h = max(110, height // 7)
+    panel_y0 = height - panel_h
     draw.rectangle(
-        [(0, panel_y0), (size, size)], fill=(0, 0, 0, 170)
+        [(0, panel_y0), (width, height)], fill=(0, 0, 0, 170)
     )
 
     name_cn = info.get("name_cn") or ""
@@ -509,7 +536,7 @@ def annotate_image(
     )
     line3 = f"中心 ({lng:.1f}°E, {lat:.1f}°N)  ·  数据源 {info.get('agencies', '')}  ·  生成 {generated_at}"
 
-    pad = max(12, size // 80)
+    pad = max(12, long_side // 80)
     y = panel_y0 + pad
     draw.text((pad, y), line1, font=title_font, fill=(255, 255, 255, 255))
     y += int(title_font.size * 1.4)
@@ -533,15 +560,16 @@ def _draw_track_line(
     - 实况线：统一琥珀色 #fbbf24，宽 3，不透明度 0.9（与 useStormOverlay.ts actualLines 一致）
     - 圆点：按强度 code 着色（STORM_COLOR_BY_CODE），白色描边 1.5px（与 .storm-hit CSS 一致）
     """
-    size = img_size[0]
-    half = size / 2.0
+    width, height = img_size
+    half_x = width / 2.0
+    half_y = height / 2.0
     center_lng = current_point["lng"]
     center_lat = current_point["lat"]
     center_pix_x = lng2pix(center_lng, zoom)
     center_pix_y = lat2pix(center_lat, zoom)
 
-    # 按图边长缩放样式参数（zoom-earth-map 在地图上是固定像素，卫星图按比例放大）
-    scale = size / 1080.0
+    # 按较长边缩放样式参数（zoom-earth-map 在地图上是固定像素，卫星图按比例放大）
+    scale = max(width, height) / 1080.0
     point_r = max(3, round(STORM_POINT_RADIUS * scale))  # 地图 5px → 1080 图约 5px
     line_width = max(2, round(3 * scale))
     stroke_width = max(1, round(1.5 * scale))
@@ -554,8 +582,8 @@ def _draw_track_line(
             continue
         if int(dt.timestamp()) > current_ts:
             break
-        px = lng2pix(p["lng"], zoom) - center_pix_x + half
-        py = lat2pix(p["lat"], zoom) - center_pix_y + half
+        px = lng2pix(p["lng"], zoom) - center_pix_x + half_x
+        py = lat2pix(p["lat"], zoom) - center_pix_y + half_y
         pts.append((px, py, p.get("code")))
 
     if len(pts) < 2:
@@ -615,7 +643,7 @@ def _filter_timestamps(
 def generate_storm_satellite_zip(
     track_data: dict,
     output_zip: Path,
-    size: int | None = None,
+    gc: GenConfig | None = None,
     progress_cb: Any = None,
 ) -> int:
     """为单个台风生成卫星图 zip。
@@ -623,13 +651,13 @@ def generate_storm_satellite_zip(
     Args:
         track_data: tracks/{id}.json 或 history/{id}.json 解析后的 dict
         output_zip: 输出 zip 路径
-        size: 单张图边长，None 用 config.SATELLITE_IMAGE_SIZE
+        gc: 生成参数（宽高、叠加层开关、城市字号缩放），None 用默认 1080×1080
         progress_cb: 可选回调 cb(current, total)，用于上报进度
 
     Returns:
         实际生成的图片数。
     """
-    size = size or config.SATELLITE_IMAGE_SIZE
+    gc = gc or GenConfig()
     zoom = config.SATELLITE_TILE_ZOOM
     info = track_data.get("info") or {}
     track_history = track_data.get("track_history") or []
@@ -668,7 +696,7 @@ def generate_storm_satellite_zip(
             )
 
     total = len(timestamps)
-    logger.info(f"[{storm_id}] 计划生成 {total} 帧卫星图")
+    logger.info(f"[{storm_id}] 计划生成 {total} 帧卫星图（{gc.size_sig}）")
     generated_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
     output_zip.parent.mkdir(parents=True, exist_ok=True)
@@ -689,10 +717,10 @@ def generate_storm_satellite_zip(
                 continue
 
             frame = build_frame(
-                point["lng"], point["lat"], ts, zoom, size, fetcher, session
+                point["lng"], point["lat"], ts, zoom, gc.width, gc.height, fetcher, session
             )
             frame = annotate_image(
-                frame, info, point, ts, track_history, zoom, size, generated_at
+                frame, info, point, ts, track_history, zoom, gc, generated_at
             )
 
             # 文件名：序号_台风ID_北京时间_Unix时间戳.jpg
@@ -721,9 +749,10 @@ def generate_storm_satellite_zip(
 class TaskState:
     """卫星图生成任务状态。"""
 
-    def __init__(self, task_id: str, storm_id: str):
+    def __init__(self, task_id: str, storm_id: str, size_sig: str = "1080x1080"):
         self.task_id = task_id
         self.storm_id = storm_id
+        self.size_sig = size_sig  # 输出 zip 的尺寸签名，供下载端点定位
         self.status: str = "running"  # running | done | error
         self.current: int = 0
         self.total: int = 0
@@ -756,10 +785,11 @@ def run_generation_task(
     storm_id: str,
     track_data: dict,
     output_zip: Path,
-    size: int | None = None,
+    gc: GenConfig | None = None,
 ) -> None:
     """线程入口：在后台执行生成并更新任务状态。"""
-    state = TaskState(task_id, storm_id)
+    gc = gc or GenConfig()
+    state = TaskState(task_id, storm_id, gc.size_sig)
     _TASKS[task_id] = state
 
     def cb(current: int, total: int) -> None:
@@ -768,7 +798,7 @@ def run_generation_task(
 
     try:
         count = generate_storm_satellite_zip(
-            track_data, output_zip, size=size, progress_cb=cb
+            track_data, output_zip, gc=gc, progress_cb=cb
         )
         state.status = "done"
         state.total = state.total or count

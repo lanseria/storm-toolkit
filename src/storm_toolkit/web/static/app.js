@@ -349,20 +349,88 @@ async function toggleHistoryDetail(stormId, btn) {
 }
 
 // ── 卫星图生成 ──────────────────────────────────────────────────────────
-async function generateSatellite(stormId, source, btn) {
-  const originalText = btn ? btn.textContent : "";
+// 弹窗暂存上下文：点击「开始生成」时使用
+let _satCtx = null;
+
+function generateSatellite(stormId, source, btn) {
+  // 打开配置弹窗，暂存触发上下文
+  _satCtx = { stormId, source, btn, originalText: btn ? btn.textContent : "" };
+  const title = $("sat-modal-title");
+  title.textContent = `生成卫星图 · ${stormId}`;
+  openSatModal();
+}
+
+function openSatModal() {
+  // 每次打开重置为默认值（方形 1080）
+  $("sat-width").value = 1080;
+  $("sat-height").value = 1080;
+  $("sat-font-scale").value = 1;
+  $("sat-font-scale-val").textContent = "1.0×";
+  $("sat-show-boundaries").checked = true;
+  $("sat-show-cities").checked = true;
+  syncPresetActive();
+  $("sat-modal").hidden = false;
+}
+
+function closeSatModal() {
+  $("sat-modal").hidden = true;
+  _satCtx = null;
+}
+
+function syncPresetActive() {
+  const w = $("sat-width").value;
+  const h = $("sat-height").value;
+  document.querySelectorAll(".preset-btns button").forEach((b) => {
+    b.classList.toggle("active", String(b.dataset.w) === String(w) && String(b.dataset.h) === String(h));
+  });
+}
+
+// 预设按钮：点击后填入宽高
+document.querySelectorAll(".preset-btns button").forEach((b) => {
+  b.addEventListener("click", () => {
+    $("sat-width").value = b.dataset.w;
+    $("sat-height").value = b.dataset.h;
+    syncPresetActive();
+  });
+});
+
+// 手动改宽高时，清除预设高亮（除非恰好匹配）
+$("sat-width").addEventListener("input", syncPresetActive);
+$("sat-height").addEventListener("input", syncPresetActive);
+
+// 字号滑块实时显示
+$("sat-font-scale").addEventListener("input", (e) => {
+  $("sat-font-scale-val").textContent = `${parseFloat(e.target.value).toFixed(1)}×`;
+});
+
+$("sat-cancel").addEventListener("click", closeSatModal);
+$("sat-modal").querySelector(".modal-backdrop").addEventListener("click", closeSatModal);
+
+$("sat-confirm").addEventListener("click", async () => {
+  const ctx = _satCtx;
+  if (!ctx) return;
+  const params = new URLSearchParams();
+  params.set("source", ctx.source);
+  params.set("width", parseInt($("sat-width").value, 10) || 1080);
+  params.set("height", parseInt($("sat-height").value, 10) || 1080);
+  params.set("show_boundaries", $("sat-show-boundaries").checked ? "true" : "false");
+  params.set("show_cities", $("sat-show-cities").checked ? "true" : "false");
+  params.set("city_font_scale", $("sat-font-scale").value);
+  closeSatModal();
+
+  const { btn, originalText, stormId } = ctx;
   if (btn) {
     btn.disabled = true;
     btn.textContent = "启动中...";
   }
   try {
     const r = await fetchJson(
-      `/api/satellite/${encodeURIComponent(stormId)}?source=${source}`,
+      `/api/satellite/${encodeURIComponent(stormId)}?${params}`,
       { method: "POST" },
     );
     if (r.cached) {
       // 归档命中缓存，直接下载
-      downloadZip(stormId);
+      downloadZip(stormId, r.size_sig);
       if (btn) {
         btn.textContent = "已下载缓存";
         setTimeout(() => { btn.disabled = false; btn.textContent = originalText; }, 2000);
@@ -381,7 +449,7 @@ async function generateSatellite(stormId, source, btn) {
     }
     alert(`生成卫星图失败：${e.message}`);
   }
-}
+});
 
 function pollSatelliteTask(taskId, stormId, btn, originalText) {
   const interval = setInterval(async () => {
@@ -398,12 +466,11 @@ function pollSatelliteTask(taskId, stormId, btn, originalText) {
         if (btn) {
           btn.textContent = "已完成，下载中...";
         }
-        downloadZip(stormId);
+        downloadZip(stormId, t.size_sig);
         if (btn) {
           setTimeout(() => { btn.disabled = false; btn.textContent = originalText; }, 2500);
         }
       } else {
-        // error
         if (btn) {
           btn.disabled = false;
           btn.textContent = originalText;
@@ -421,14 +488,25 @@ function pollSatelliteTask(taskId, stormId, btn, originalText) {
   }, 1500);
 }
 
-function downloadZip(stormId) {
-  window.location.href = `/api/satellite/${encodeURIComponent(stormId)}.zip`;
+function downloadZip(stormId, sizeSig) {
+  const sig = sizeSig || "1080x1080";
+  window.location.href = `/api/satellite/${encodeURIComponent(stormId)}.zip?size_sig=${sig}`;
 }
 
 $("refresh-btn").addEventListener("click", () => {
   loadActiveStorms();
   loadWatched();
   loadHistory();
+});
+
+$("clear-sat-cache-btn").addEventListener("click", async () => {
+  if (!confirm("确认清除所有已生成的卫星图缓存（data/satellite/*.zip）？")) return;
+  try {
+    const r = await fetchJson("/api/satellite/cache", { method: "DELETE" });
+    alert(`已清除 ${r.removed} 个卫星图 zip 缓存`);
+  } catch (e) {
+    alert(`清除失败：${e.message}`);
+  }
 });
 
 $("purge-btn").addEventListener("click", async () => {

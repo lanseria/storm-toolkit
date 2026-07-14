@@ -154,30 +154,31 @@ def _project_ring(
     center_lng: float,
     center_lat: float,
     zoom: int,
-    half: float,
+    half_x: float,
+    half_y: float,
 ) -> list[tuple[float, float]]:
     """把一条经纬度环投影到以 (center_lng, center_lat) 为中心的图片像素坐标。"""
-    # 复用 imagery 的坐标转换（避免循环导入，内联简单版）
     from .imagery import lng2pix, lat2pix
     cpx = lng2pix(center_lng, zoom)
     cpy = lat2pix(center_lat, zoom)
     return [
-        (lng2pix(lng, zoom) - cpx + half, lat2pix(lat, zoom) - cpy + half)
+        (lng2pix(lng, zoom) - cpx + half_x, lat2pix(lat, zoom) - cpy + half_y)
         for lng, lat in ring
     ]
 
 
 def _iter_visible_segments(
     pts: list[tuple[float, float]],
-    size: int,
+    width: int,
+    height: int,
     margin: float = 50.0,
 ) -> Iterator[tuple[tuple[float, float], tuple[float, float]]]:
-    """产出落在图框 [−margin, size+margin] 内的相邻点对。
+    """产出落在图框 [−margin, w/h+margin] 内的相邻点对。
 
     简单裁切：只要线段至少一端在缓冲区内就画整段（地图边界线用，过度裁切比断线美观）。
     """
-    x_lo, x_hi = -margin, size + margin
-    y_lo, y_hi = -margin, size + margin
+    x_lo, x_hi = -margin, width + margin
+    y_lo, y_hi = -margin, height + margin
     for i in range(len(pts) - 1):
         x0, y0 = pts[i]
         x1, y1 = pts[i + 1]
@@ -195,28 +196,37 @@ def draw_overlays(
     center_lng: float,
     center_lat: float,
     zoom: int,
-    size: int,
+    width: int,
+    height: int,
     font_fn,
+    show_boundaries: bool | None = None,
+    show_cities: bool | None = None,
+    city_font_scale: float = 1.0,
 ) -> None:
-    """在透明 overlay 上绘制边界线与城市点位。
+    """在图片上绘制边界线与城市点位（样式照搬 zoom-earth-map）。
 
     Args:
-        overlay: RGBA 透明图层，直接在上面绘制
+        overlay: RGBA 图片，直接在上面绘制（通常传入卫星图本体）
         center_lng/lat: 图片中心的经纬度（台风中心）
         zoom: 贴图 zoom 级别
-        size: 图片边长 px
+        width/height: 图片宽高 px
         font_fn: 字号 → ImageFont 的加载函数
+        show_boundaries / show_cities: 显式开关，None 则回退 config.OVERLAY_*
+        city_font_scale: 城市标签字号缩放系数（1.0 = 默认）
     """
     draw = ImageDraw.Draw(overlay)
-    half = size / 2.0
-    scale = size / 1080.0  # 样式参数按 1080 基准缩放
+    half_x = width / 2.0
+    half_y = height / 2.0
+    scale = max(width, height) / 1080.0  # 样式参数按 1080 基准缩放
+    sb = config.OVERLAY_BOUNDARIES if show_boundaries is None else show_boundaries
+    sc = config.OVERLAY_CITIES if show_cities is None else show_cities
 
-    if config.OVERLAY_BOUNDARIES:
-        _draw_china_boundaries(draw, center_lng, center_lat, zoom, size, half, scale)
-        _draw_global_coastline(draw, center_lng, center_lat, zoom, size, half, scale)
+    if sb:
+        _draw_china_boundaries(draw, center_lng, center_lat, zoom, width, height, half_x, half_y, scale)
+        _draw_global_coastline(draw, center_lng, center_lat, zoom, width, height, half_x, half_y, scale)
 
-    if config.OVERLAY_CITIES:
-        _draw_cities(draw, center_lng, center_lat, zoom, size, half, scale, font_fn)
+    if sc:
+        _draw_cities(draw, center_lng, center_lat, zoom, width, height, half_x, half_y, scale, font_fn, city_font_scale)
 
 
 def _draw_china_boundaries(
@@ -224,8 +234,10 @@ def _draw_china_boundaries(
     center_lng: float,
     center_lat: float,
     zoom: int,
-    size: int,
-    half: float,
+    width: int,
+    height: int,
+    half_x: float,
+    half_y: float,
     scale: float,
 ) -> None:
     rings = load_china_boundaries()
@@ -234,7 +246,7 @@ def _draw_china_boundaries(
 
     # 预投影所有环
     projected = [
-        _project_ring(ring, center_lng, center_lat, zoom, half)
+        _project_ring(ring, center_lng, center_lat, zoom, half_x, half_y)
         for ring in rings
     ]
 
@@ -242,14 +254,14 @@ def _draw_china_boundaries(
     outline_w = max(1, round(CHINA_OUTLINE_WIDTH * scale))
     outline_fill = _hex_rgb(CHINA_OUTLINE_COLOR, CHINA_OUTLINE_ALPHA)
     for pts in projected:
-        for (x0, y0), (x1, y1) in _iter_visible_segments(pts, size):
+        for (x0, y0), (x1, y1) in _iter_visible_segments(pts, width, height):
             draw.line([(x0, y0), (x1, y1)], fill=outline_fill, width=outline_w)
 
     # 上层细白线
     line_w = max(1, round(CHINA_LINE_WIDTH * scale))
     line_fill = _hex_rgb(CHINA_LINE_COLOR, CHINA_LINE_ALPHA)
     for pts in projected:
-        for (x0, y0), (x1, y1) in _iter_visible_segments(pts, size):
+        for (x0, y0), (x1, y1) in _iter_visible_segments(pts, width, height):
             draw.line([(x0, y0), (x1, y1)], fill=line_fill, width=line_w)
 
 
@@ -258,8 +270,10 @@ def _draw_global_coastline(
     center_lng: float,
     center_lat: float,
     zoom: int,
-    size: int,
-    half: float,
+    width: int,
+    height: int,
+    half_x: float,
+    half_y: float,
     scale: float,
 ) -> None:
     lines = load_global_coastline()
@@ -269,8 +283,8 @@ def _draw_global_coastline(
     w = max(1, round(COAST_WIDTH * scale))
     fill = _hex_rgb(COAST_COLOR, COAST_ALPHA)
     for line in lines:
-        pts = _project_ring(line, center_lng, center_lat, zoom, half)
-        for (x0, y0), (x1, y1) in _iter_visible_segments(pts, size):
+        pts = _project_ring(line, center_lng, center_lat, zoom, half_x, half_y)
+        for (x0, y0), (x1, y1) in _iter_visible_segments(pts, width, height):
             draw.line([(x0, y0), (x1, y1)], fill=fill, width=w)
 
 
@@ -279,10 +293,13 @@ def _draw_cities(
     center_lng: float,
     center_lat: float,
     zoom: int,
-    size: int,
-    half: float,
+    width: int,
+    height: int,
+    half_x: float,
+    half_y: float,
     scale: float,
     font_fn,
+    city_font_scale: float,
 ) -> None:
     cities = load_cities()
     if not cities:
@@ -292,17 +309,17 @@ def _draw_cities(
     cpx = lng2pix(center_lng, zoom)
     cpy = lat2pix(center_lat, zoom)
 
-    # 预计算各等级样式
+    # 预计算各等级样式（城市字号按 city_font_scale 缩放）
     styles = {
         1: {
             "r": max(2, round(CITY_LEVEL1_RADIUS * scale)),
             "sw": max(1, round(CITY_LEVEL1_STROKE * scale)),
-            "fs": max(10, round(CITY_LEVEL1_FONTSIZE * scale)),
+            "fs": max(10, round(CITY_LEVEL1_FONTSIZE * scale * city_font_scale)),
         },
         2: {
             "r": max(2, round(CITY_LEVEL2_RADIUS * scale)),
             "sw": max(1, round(CITY_LEVEL2_STROKE * scale)),
-            "fs": max(9, round(CITY_LEVEL2_FONTSIZE * scale)),
+            "fs": max(9, round(CITY_LEVEL2_FONTSIZE * scale * city_font_scale)),
         },
     }
     fill = _hex_rgb(CITY_COLOR, 255)
@@ -317,9 +334,9 @@ def _draw_cities(
         except (KeyError, ValueError, TypeError):
             continue
 
-        px = lng2pix(lng, zoom) - cpx + half
-        py = lat2pix(lat, zoom) - cpy + half
-        if px < -20 or px > size + 20 or py < -20 or py > size + 20:
+        px = lng2pix(lng, zoom) - cpx + half_x
+        py = lat2pix(lat, zoom) - cpy + half_y
+        if px < -20 or px > width + 20 or py < -20 or py > height + 20:
             continue
 
         st = styles.get(level, styles[2])
@@ -334,7 +351,6 @@ def _draw_cities(
         if name:
             font = font_fn(st["fs"])
             offset_y = CITY_LABEL_OFFSET_Y * st["fs"]
-            # 用 textbbox 计算居中，并先画描边再画填充实现 halo
             tx = px
             ty = py + offset_y - st["fs"]  # anchor top → 文字在点上方
             try:
